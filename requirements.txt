@@ -3,7 +3,7 @@ langchain
 langchain-community
 langchain-openai
 langchain-core
-scikit-learn
+faiss-cpu
 youtube-transcript-api
 beautifulsoup4
 tiktoken
