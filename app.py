@@ -1,7 +1,7 @@
 import streamlit as st
 from langchain_community.document_loaders import WebBaseLoader, YoutubeLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
+from langchain_community.vectorstores import SKLearnVectorStore
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
@@ -10,7 +10,6 @@ from langchain_core.prompts import ChatPromptTemplate
 # --- CONFIGURATION & BRANDING ---
 st.set_page_config(page_title="Geostrata AI", page_icon="🌏", layout="wide")
 
-# Custom Styling for The Geostrata (Black/Gold theme)
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #ffffff; }
@@ -26,17 +25,14 @@ st.markdown("Answers questions on geopolitics using **only** The Geostrata's Art
 # --- SIDEBAR: SETTINGS & DATA ---
 with st.sidebar:
     st.header("⚙️ Configuration")
-    api_key = st.text_input("OpenAI API Key", type="password", help="Get this from platform.openai.com")
+    api_key = st.text_input("OpenAI API Key", type="password")
     
     st.divider()
     st.subheader("📚 Knowledge Base")
-    st.info("Paste URLs below to train the bot.")
     
-    # Pre-filled with your actual main pages
     default_web = "https://www.thegeostrata.com/geopost\nhttps://www.thegeostrata.com/aboutus"
     website_urls = st.text_area("Article URLs (One per line)", value=default_web, height=150)
     
-    # Pre-filled with your actual channel videos
     default_yt = "https://www.youtube.com/watch?v=hBpdp28CdIU\nhttps://www.youtube.com/watch?v=nYpkLo_m--E"
     youtube_urls = st.text_area("YouTube Video URLs (One per line)", value=default_yt, height=150)
     
@@ -51,7 +47,6 @@ def get_vectorstore(web_urls, yt_urls):
     web_list = [u.strip() for u in web_urls.split('\n') if u.strip()]
     if web_list:
         try:
-            # User agent helps bypass some website blockers
             loader = WebBaseLoader(web_list, header_template={'User-Agent': 'Mozilla/5.0'})
             docs.extend(loader.load())
         except Exception as e:
@@ -70,12 +65,15 @@ def get_vectorstore(web_urls, yt_urls):
     if not docs:
         return None
 
-    # 3. Split text into chunks
+    # 3. Split text
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     split_docs = text_splitter.split_documents(docs)
     
-    # 4. Save to Vector Store (Memory)
-    return FAISS.from_documents(split_docs, OpenAIEmbeddings(api_key=api_key))
+    # 4. Save to Memory (SKLearn instead of FAISS for better compatibility)
+    return SKLearnVectorStore.from_documents(
+        documents=split_docs, 
+        embedding=OpenAIEmbeddings(api_key=api_key)
+    )
 
 def get_rag_chain(vectorstore):
     """Creates the Indian-Perspective AI Brain."""
@@ -104,30 +102,26 @@ def get_rag_chain(vectorstore):
 
 # --- MAIN APP ---
 if train_btn and api_key:
-    with st.spinner("Scouring The Geostrata archives... (This may take a moment)"):
+    with st.spinner("Scouring The Geostrata archives..."):
         st.session_state.vectorstore = get_vectorstore(website_urls, youtube_urls)
         st.success("✅ Training Complete! The AI now knows your content.")
 
 if "vectorstore" in st.session_state and st.session_state.vectorstore:
-    user_query = st.chat_input("Ask a question (e.g., 'What is India's stance on the Chahbahar port?')")
+    user_query = st.chat_input("Ask a question...")
     
     if user_query:
-        # Display User Message
         st.chat_message("user").write(user_query)
-        
-        # Generate Answer
         with st.chat_message("assistant"):
-            with st.spinner("Analyzing from Indian perspective..."):
+            with st.spinner("Analyzing..."):
                 chain = get_rag_chain(st.session_state.vectorstore)
                 response = chain.invoke({"input": user_query})
-                
                 st.write(response["answer"])
                 
-                # Citation Dropdown
                 with st.expander("📚 Sources Used"):
                     for doc in response["context"]:
                         source = doc.metadata.get('source', 'Unknown')
                         title = doc.metadata.get('title', 'Untitled')
                         st.write(f"- [{title}]({source})")
+
 elif not api_key:
     st.warning("👈 Please enter your OpenAI API Key in the sidebar to start.")
