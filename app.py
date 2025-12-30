@@ -1,7 +1,7 @@
 import streamlit as st
 from langchain_community.document_loaders import WebBaseLoader, YoutubeLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import SKLearnVectorStore
+from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
@@ -69,11 +69,8 @@ def get_vectorstore(web_urls, yt_urls):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     split_docs = text_splitter.split_documents(docs)
     
-    # 4. Save to Memory (SKLearn instead of FAISS for better compatibility)
-    return SKLearnVectorStore.from_documents(
-        documents=split_docs, 
-        embedding=OpenAIEmbeddings(api_key=api_key)
-    )
+    # 4. Save to Memory (FAISS)
+    return FAISS.from_documents(split_docs, OpenAIEmbeddings(api_key=api_key))
 
 def get_rag_chain(vectorstore):
     """Creates the Indian-Perspective AI Brain."""
